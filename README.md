@@ -4,6 +4,8 @@
 
 LLM Council is a local-first macOS app for side-by-side LLM web UI workflows (ChatGPT, Claude, Gemini, Grok, Perplexity, DeepSeek) with shared prompt dispatch, layout presets, and session persistence.
 
+![](docs/llm-council.png)
+
 ## Why
 
 Comparing responses across multiple model providers is slow when every prompt has to be copied manually between browser tabs. LLM Council keeps each provider in its own pane and lets you send one prompt to all visible providers from a single workspace.

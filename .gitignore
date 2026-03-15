@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+
+# Xcode user state
+**/xcuserdata/
+*.xcuserstate
+
+# Build products and derived data
+.build/
+DerivedData/
+
+# Xcode result bundles and logs
+.artifacts/
+*.xcresult/
+*.xcactivitylog
+*.profraw
+*.swiftdeps
+*.swiftsourceinfo
+
+# Local-only bootstrap/config state
+.codex/
+.xcodebuildmcp/
+.agents/
+
+# Internal planning docs (kept local)
+AGENTS.md
+CLAUDE.md
+docs/workpads/
+docs/bootstrap/
+docs/prompts/
+
+# Common editor noise
+*.swp
+*.swo

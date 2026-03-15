@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_lib.sh"
+
+load_apple_env
+ensure_sim_booted
+
+PAYLOAD="${1:-}"
+if [[ -z "$PAYLOAD" || ! -f "$PAYLOAD" ]]; then
+  echo "Usage: ./bin/sim-push path/to/payload.apns"
+  exit 1
+fi
+
+if [[ -z "${BUNDLE_ID:-}" ]]; then
+  echo "BUNDLE_ID is not set in .codex/apple.env"
+  exit 1
+fi
+
+xcrun simctl push booted "$BUNDLE_ID" "$PAYLOAD"

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_lib.sh"
+
+load_apple_env
+
+ARGS=(
+  "${CONTAINER_ARGS[@]}"
+  -scheme "${TEST_SCHEME:-$XCODE_SCHEME}"
+  -configuration "${XCODE_CONFIGURATION}"
+  -destination "$(macos_destination)"
+  test
+)
+
+if [[ -n "${TEST_PLAN:-}" ]]; then
+  ARGS=(-testPlan "$TEST_PLAN" "${ARGS[@]}")
+fi
+
+if [[ -n "${UI_TEST_TARGET:-}" ]]; then
+  ARGS=(-skip-testing:"$UI_TEST_TARGET" "${ARGS[@]}")
+else
+  ARGS=(-skip-testing:"LLM CouncilUITests" "${ARGS[@]}")
+fi
+
+if [[ -n "${ONLY_TESTING:-}" ]]; then
+  ARGS=(-only-testing:"$ONLY_TESTING" "${ARGS[@]}")
+fi
+
+run_xcodebuild "test-unit" "${ARGS[@]}"

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+FAILED=0
+
+if command -v swiftformat >/dev/null 2>&1; then
+  swiftformat . --lint || FAILED=1
+fi
+
+if command -v swiftlint >/dev/null 2>&1; then
+  swiftlint || FAILED=1
+fi
+
+if grep -R --line-number --include="*.swift" "NavigationView" . >/dev/null 2>&1; then
+  echo "Custom lint: NavigationView found. Prefer NavigationStack unless this is legacy compatibility work."
+  FAILED=1
+fi
+
+exit "$FAILED"

@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+mkdir -p "$ROOT/.codex" "$ROOT/.xcodebuildmcp" "$ROOT/.artifacts/xcresults" "$ROOT/.artifacts/screenshots" "$ROOT/.artifacts/videos"
+
+detect_workspace() {
+  find "$ROOT" -maxdepth 2 -name "*.xcworkspace" -type d ! -path "*/Pods/*" | head -n 1 || true
+}
+
+detect_project() {
+  find "$ROOT" -maxdepth 2 -name "*.xcodeproj" -type d ! -path "*/Pods/*" | head -n 1 || true
+}
+
+CONTAINER_PATH=""
+CONTAINER_KIND=""
+WORKSPACE="$(detect_workspace)"
+PROJECT="$(detect_project)"
+
+if [[ -n "$WORKSPACE" ]]; then
+  CONTAINER_PATH="$WORKSPACE"
+  CONTAINER_KIND="workspace"
+elif [[ -n "$PROJECT" ]]; then
+  CONTAINER_PATH="$PROJECT"
+  CONTAINER_KIND="project"
+else
+  echo "No .xcworkspace or .xcodeproj found under $ROOT"
+  exit 1
+fi
+
+if [[ "$CONTAINER_KIND" == "workspace" ]]; then
+  LIST_JSON="$(xcodebuild -list -json -workspace "$CONTAINER_PATH" 2>/dev/null || true)"
+else
+  LIST_JSON="$(xcodebuild -list -json -project "$CONTAINER_PATH" 2>/dev/null || true)"
+fi
+
+if [[ -z "$LIST_JSON" ]]; then
+  echo "Could not inspect schemes with xcodebuild -list -json"
+  exit 1
+fi
+
+SCHEME="$(printf '%s' "$LIST_JSON" | jq -r '
+  [
+    .workspace.schemes[]?,
+    .project.schemes[]?
+  ]
+  | unique
+  | map(select(test("Tests$|UITests$") | not))
+  | .[0] // empty
+')"
+
+TEST_SCHEME="${SCHEME}"
+UI_TEST_TARGET="$(printf '%s' "$LIST_JSON" | jq -r '
+  [
+    .workspace.schemes[]?,
+    .project.schemes[]?
+  ]
+  | unique
+  | map(select(test("UITests$")))
+  | .[0] // empty
+')"
+
+pick_simulator() {
+  local candidates=(
+    "iPhone 17 Pro"
+    "iPhone 17"
+    "iPhone 16 Pro"
+    "iPhone 16"
+    "iPhone 15 Pro"
+    "iPhone 15"
+  )
+  local available
+  available="$(xcrun simctl list devices available -j | jq -r '
+    .devices
+    | to_entries[]
+    | .value[]
+    | .name
+  ' | sort -u)"
+
+  for name in "${candidates[@]}"; do
+    if printf '%s\n' "$available" | grep -Fxq "$name"; then
+      printf '%s\n' "$name"
+      return
+    fi
+  done
+
+  printf '%s\n' "$available" | grep '^iPhone ' | head -n 1 || true
+}
+
+SIMULATOR_NAME="$(pick_simulator)"
+if [[ -z "$SIMULATOR_NAME" ]]; then
+  SIMULATOR_NAME="iPhone 17 Pro"
+fi
+
+REL_CONTAINER_PATH="${CONTAINER_PATH#$ROOT/}"
+REL_WORKSPACE=""
+REL_PROJECT=""
+if [[ "$CONTAINER_KIND" == "workspace" ]]; then
+  REL_WORKSPACE="$REL_CONTAINER_PATH"
+else
+  REL_PROJECT="$REL_CONTAINER_PATH"
+fi
+
+ENV_FILE="$ROOT/.codex/apple.env"
+if [[ ! -f "$ENV_FILE" ]]; then
+  cat > "$ENV_FILE" <<EOF
+XCODE_WORKSPACE="${REL_WORKSPACE}"
+XCODE_PROJECT="${REL_PROJECT}"
+XCODE_SCHEME="${SCHEME}"
+TEST_SCHEME="${TEST_SCHEME}"
+MACOS_SCHEME="${SCHEME}"
+UI_TEST_TARGET="${UI_TEST_TARGET}"
+IOS_SIMULATOR="${SIMULATOR_NAME}"
+XCODE_CONFIGURATION="Debug"
+TEST_PLAN=""
+BUNDLE_ID=""
+
+DERIVED_DATA_PATH=".build/DerivedData"
+RESULT_BUNDLE_DIR=".artifacts/xcresults"
+SCREENSHOT_DIR=".artifacts/screenshots"
+VIDEO_DIR=".artifacts/videos"
+EOF
+  echo "Generated $ENV_FILE"
+else
+  echo "Preserved existing $ENV_FILE"
+fi
+
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+
+PROJECT_PATH="${XCODE_WORKSPACE:-$XCODE_PROJECT}"
+if [[ -z "$PROJECT_PATH" ]]; then
+  echo "Missing XCODE_WORKSPACE / XCODE_PROJECT in $ENV_FILE"
+  exit 1
+fi
+
+cat > "$ROOT/.xcodebuildmcp/config.yaml" <<EOF
+schemaVersion: 1
+enabledWorkflows:
+  - simulator
+  - ui-automation
+  - project-discovery
+sessionDefaults:
+  scheme: ${XCODE_SCHEME}
+  projectPath: ./${PROJECT_PATH}
+  simulatorName: ${IOS_SIMULATOR}
+EOF
+
+echo "Generated $ROOT/.xcodebuildmcp/config.yaml"
+
+if [[ -n "${XCODE_WORKSPACE:-}" ]]; then
+  xcodebuild -resolvePackageDependencies -workspace "$XCODE_WORKSPACE" -scheme "$XCODE_SCHEME" >/dev/null 2>&1 || true
+elif [[ -n "${XCODE_PROJECT:-}" ]]; then
+  xcodebuild -resolvePackageDependencies -project "$XCODE_PROJECT" -scheme "$XCODE_SCHEME" >/dev/null 2>&1 || true
+fi
+
+echo
+echo "Bootstrap summary:"
+echo "  root:           $ROOT"
+echo "  container kind: $CONTAINER_KIND"
+echo "  container path: $PROJECT_PATH"
+echo "  scheme:         ${XCODE_SCHEME}"
+echo "  test scheme:    ${TEST_SCHEME}"
+echo "  ui test target: ${UI_TEST_TARGET:-<none>}"
+echo "  simulator:      ${IOS_SIMULATOR}"
+echo
+echo "Review .codex/apple.env before committing."

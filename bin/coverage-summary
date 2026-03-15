@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_lib.sh"
+
+load_apple_env
+
+PATH_ARG="${1:-}"
+if [[ -n "$PATH_ARG" ]]; then
+  RESULT_PATH="$PATH_ARG"
+else
+  RESULT_PATH="$(latest_xcresult || true)"
+fi
+
+if [[ -z "$RESULT_PATH" || ! -d "$RESULT_PATH" ]]; then
+  echo "No xcresult bundle found."
+  exit 1
+fi
+
+xcrun xccov view --report "$RESULT_PATH"

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if command -v swiftformat >/dev/null 2>&1; then
+  swiftformat .
+else
+  echo "swiftformat is not installed."
+  exit 1
+fi

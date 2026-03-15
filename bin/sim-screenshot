@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_lib.sh"
+
+load_apple_env
+ensure_sim_booted
+
+NAME="${1:-sim}"
+OUT="${SCREENSHOT_DIR}/${NAME}-$(timestamp).png"
+xcrun simctl io booted screenshot "$OUT" >/dev/null
+echo "$OUT"

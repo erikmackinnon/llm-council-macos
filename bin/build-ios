@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_lib.sh"
+
+load_apple_env
+ensure_sim_booted
+
+run_xcodebuild "build-ios" \
+  "${CONTAINER_ARGS[@]}" \
+  -scheme "${XCODE_SCHEME}" \
+  -configuration "${XCODE_CONFIGURATION}" \
+  -destination "$(ios_destination)" \
+  build

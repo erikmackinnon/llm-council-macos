@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_lib.sh"
+
+load_apple_env
+
+if [[ -z "${UI_TEST_TARGET:-}" && -z "${ONLY_TESTING:-}" ]]; then
+  echo "UI_TEST_TARGET is not set in .codex/apple.env"
+  echo "Either set it manually or run only specific tests with ONLY_TESTING=<target/path> ./bin/test-ui"
+  exit 1
+fi
+
+ARGS=(
+  "${CONTAINER_ARGS[@]}"
+  -scheme "${TEST_SCHEME:-$XCODE_SCHEME}"
+  -configuration "${XCODE_CONFIGURATION}"
+  -destination "$(macos_destination)"
+  -only-testing:"${ONLY_TESTING:-${UI_TEST_TARGET:-LLM CouncilUITests}}"
+  test
+)
+
+if [[ -n "${TEST_PLAN:-}" ]]; then
+  ARGS=(-testPlan "$TEST_PLAN" "${ARGS[@]}")
+fi
+
+run_xcodebuild "test-ui" "${ARGS[@]}"

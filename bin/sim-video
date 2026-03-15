@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_lib.sh"
+
+load_apple_env
+ensure_sim_booted
+
+SECONDS_TO_RECORD="${1:-15}"
+NAME="${2:-sim}"
+OUT="${VIDEO_DIR}/${NAME}-$(timestamp).mp4"
+
+xcrun simctl io booted recordVideo "$OUT" >/dev/null 2>&1 &
+PID=$!
+sleep "$SECONDS_TO_RECORD"
+kill -INT "$PID" >/dev/null 2>&1 || true
+wait "$PID" >/dev/null 2>&1 || true
+
+echo "$OUT"
